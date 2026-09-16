@@ -11,3 +11,10 @@
 
 @media(max-width:900px){.admin-grid{grid-template-columns:1fr 1fr}.admin-grid .wide{grid-column:span 2}}
 @media(max-width:760px){.priority-panel>summary{padding:16px}.priority-table th,.priority-table td{padding:10px}.admin-topbar{align-items:flex-start;flex-direction:column;padding-block:14px}.admin-content{padding-inline:12px}.admin-intro{align-items:flex-start;flex-direction:column;padding:18px}.admin-list{padding:0 16px}.admin-grid{grid-template-columns:1fr}.admin-grid .wide{grid-column:1}.admin-client-head{align-items:flex-start;flex-direction:column}.publish-bar{align-items:stretch;flex-direction:column;padding:14px 16px}.publish-bar .primary{width:100%}}
+
+/* Beide acties blijven zichtbaar in de gesloten klantregel. */
+.column-head,.client-summary{grid-template-columns:48px minmax(140px,.9fr) 110px minmax(155px,1.15fr) minmax(165px,1.25fr) minmax(95px,.7fr) 20px;gap:14px}.action-label{display:none}.summary-action{min-width:0}.summary-action .next-action{overflow-wrap:anywhere}
+@media(min-width:1600px){.client-summary,.column-head{grid-template-columns:52px minmax(170px,.9fr) 120px minmax(190px,1.1fr) minmax(205px,1.25fr) 135px 20px}}
+@media(max-width:1250px){.client-summary,.column-head{grid-template-columns:34px minmax(110px,.85fr) 94px minmax(135px,1.05fr) minmax(145px,1.15fr) 80px 14px;gap:10px;padding-inline:18px}}
+@media(max-width:1050px){.column-head,.client-summary{grid-template-columns:40px minmax(125px,.85fr) 100px minmax(145px,1.05fr) minmax(155px,1.15fr) 88px 18px}}
+@media(max-width:760px){.client-summary{grid-template-columns:36px 1fr auto 16px;gap:9px;padding:17px 16px;min-height:0}.summary-last{grid-column:2/4;grid-row:2}.summary-next{grid-column:2/4;grid-row:3}.change{grid-column:2/4;grid-row:4}.action-label{display:block;font-size:10px;font-weight:700;letter-spacing:.7px;color:#7a898e;margin:5px 0 2px}.chevron{grid-column:4;grid-row:1}}
