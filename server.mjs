@@ -95,9 +95,9 @@ const server=http.createServer(async(req,res)=>{
     if(req.method==='GET' && url.pathname==='/api/admin/draft'){
       const s=session(req,'admin');if(!s)return json(res,401,{error:'Log in als beheerder.'});
       const snapshots=all(),latest=snapshots.at(-1),requested=url.searchParams.get('snapshot');
-      const selected=requested?snapshots.find(item=>item.id===requested&&item.kind==='published'):null;
+      const selected=requested?snapshots.find(item=>item.id===requested&&item.kind!=='legacy'):null;
       if(requested&&!selected)return json(res,404,{error:'Dit publicatiemoment bestaat niet of kan niet worden aangepast.'});
-      const source=selected||latest,editableSnapshots=snapshots.filter(item=>item.kind==='published').slice().reverse().map(item=>({id:item.id,label:item.label,editedAt:item.editedAt||null}));
+      const source=selected||latest,editableSnapshots=snapshots.filter(item=>item.kind!=='legacy').slice().reverse().map(item=>({id:item.id,label:item.label,editedAt:item.editedAt||null}));
       return json(res,200,{csrf:s.csrf,mode:selected?'edit':'new',draftKey:selected?'edit:'+selected.id:'new:'+String(latest?.id||'empty'),editSnapshotId:selected?.id||null,revision:selected?createHash('sha256').update(JSON.stringify(selected)).digest('hex'):null,baseSnapshotId:latest?.id||null,baseLabel:source?.label||'Nog geen update',editableSnapshots,clients:source?.clients||[]});
     }
     if(req.method==='POST' && url.pathname==='/api/admin/publish'){
@@ -105,7 +105,7 @@ const server=http.createServer(async(req,res)=>{
       if(!req.headers['x-csrf-token']||!equal(String(req.headers['x-csrf-token']),s.csrf))return json(res,403,{error:'De beveiligingscontrole is verlopen. Log opnieuw in.'});
       const input=await body(req), snapshots=all(),current=snapshots.at(-1);
       if(input.editSnapshotId){
-        const target=snapshots.find(item=>item.id===input.editSnapshotId&&item.kind==='published');
+        const target=snapshots.find(item=>item.id===input.editSnapshotId&&item.kind!=='legacy');
         if(!target)return json(res,404,{error:'Dit publicatiemoment bestaat niet of kan niet worden aangepast.'});
         const currentRevision=createHash('sha256').update(JSON.stringify(target)).digest('hex');
         if(typeof input.revision!=='string'||!equal(input.revision,currentRevision))return json(res,409,{error:'Dit moment is inmiddels aangepast. Open de datum opnieuw voordat je verdergaat.'});
