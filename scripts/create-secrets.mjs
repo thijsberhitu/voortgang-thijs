@@ -1,0 +1,11 @@
+import {randomBytes,scryptSync} from 'node:crypto';
+import {mkdirSync,writeFileSync,existsSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
+const dir=fileURLToPath(new URL('../data-private/',import.meta.url));
+mkdirSync(dir,{recursive:true});
+if(existsSync(dir+'deployment-secrets.json'))throw new Error('Bestaande sleutels niet overschreven.');
+const password=randomBytes(15).toString('base64url');
+const salt=randomBytes(16).toString('hex');
+const secrets={TEAM_PASSWORD:password,TEAM_PASSWORD_HASH:salt+':'+scryptSync(password,salt,64).toString('hex'),SESSION_SECRET:randomBytes(48).toString('base64url'),SYNC_TOKEN:randomBytes(48).toString('base64url')};
+writeFileSync(dir+'deployment-secrets.json',JSON.stringify(secrets,null,2),{mode:0o600});
+console.log('Toegangssleutels lokaal opgeslagen in data-private/deployment-secrets.json. Niet publiceren.');
