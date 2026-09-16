@@ -6,6 +6,7 @@ mkdirSync(dir,{recursive:true});
 if(existsSync(dir+'deployment-secrets.json'))throw new Error('Bestaande sleutels niet overschreven.');
 const password=randomBytes(15).toString('base64url');
 const salt=randomBytes(16).toString('hex');
-const secrets={TEAM_PASSWORD:password,TEAM_PASSWORD_HASH:salt+':'+scryptSync(password,salt,64).toString('hex'),SESSION_SECRET:randomBytes(48).toString('base64url'),SYNC_TOKEN:randomBytes(48).toString('base64url')};
+const adminPassword=randomBytes(18).toString('base64url'),adminSalt=randomBytes(16).toString('hex');
+const secrets={TEAM_PASSWORD:password,TEAM_PASSWORD_HASH:salt+':'+scryptSync(password,salt,64).toString('hex'),ADMIN_PASSWORD:adminPassword,ADMIN_PASSWORD_HASH:adminSalt+':'+scryptSync(adminPassword,adminSalt,64).toString('hex'),SESSION_SECRET:randomBytes(48).toString('base64url'),SYNC_TOKEN:randomBytes(48).toString('base64url')};
 writeFileSync(dir+'deployment-secrets.json',JSON.stringify(secrets,null,2),{mode:0o600});
 console.log('Toegangssleutels lokaal opgeslagen in data-private/deployment-secrets.json. Niet publiceren.');

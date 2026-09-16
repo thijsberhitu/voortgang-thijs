@@ -1,19 +1,19 @@
 # Voortgang Thijs
 
-Apart teamdashboard met een actuele klantenlijst, filters en uitklapbare historie. Google Sheets blijft de invoer; iedere publicatie legt een onveranderlijk rapportagemoment vast. Het project heeft geen koppeling met een ander dashboard.
+Apart teamdashboard met een actuele klantenlijst, filters, een prioriteitentabel en uitklapbare historie. De afgeschermde beheeromgeving op `/beheer` is de standaardinvoer. Iedere publicatie legt een onveranderlijk rapportagemoment vast. Het project heeft geen koppeling met een ander dashboard.
 
 ## Dagelijks gebruik
 
-1. Werk het tabblad **Dashboard invoer** bij.
-2. Controleer prioriteiten, acties en deadlines. Een laag rangnummer betekent hoge prioriteit. De status staat hiervan los.
-3. Kies op dinsdag en donderdag **Voortgang dashboard → Update vastleggen en publiceren**.
+1. Open `/beheer` en log in met het aparte beheerderswachtwoord.
+2. De klanten en laatst ingevulde gegevens staan al klaar. Werk prioriteit, status, acties, deadline en aandachtspunt bij. Datum en weeknummer worden automatisch bepaald.
+3. Kies op dinsdag en donderdag **Update publiceren**.
 4. Deel dezelfde dashboardlink. Collega’s kunnen de rapportagemomenten vergelijken en per klant eerdere acties uitklappen.
 
-De website is alleen-lezen. De invoer verandert pas op de website nadat een update is gepubliceerd. Iedere publicatie bevat alle klanten. Een klant afronden doe je met de status Afgerond; klantnamen niet wijzigen of verwijderen zonder een gecontroleerde migratie. Een naam bepaalt momenteel de vaste klant-ID. Dubbele rangnummers mogen voorkomen.
+De collegaweergave is alleen-lezen en bevat geen link naar beheer. De invoer verandert daar pas nadat een update is gepubliceerd. Een lokaal concept blijft in de browser bewaard. Iedere publicatie bevat alle klanten. Een klant afronden doe je met de status Afgerond; klantnamen niet wijzigen of verwijderen zonder een gecontroleerde migratie. Een naam bepaalt momenteel de vaste klant-ID. Dubbele rangnummers mogen voorkomen.
 
-## Google Sheets koppeling activeren
+## Optioneel: Google Sheets koppeling
 
-De koppeling moet eenmalig in het oorspronkelijke Google Sheet worden geïnstalleerd. Het toevoegen van de broncode in GitHub activeert deze koppeling niet.
+De beheeromgeving maakt Google Sheets niet meer noodzakelijk. Wie de bestaande Sheet toch als alternatieve invoer wil gebruiken, kan de koppeling eenmalig installeren. Het toevoegen van de broncode in GitHub activeert deze koppeling niet.
 
 1. Open het oorspronkelijke Sheet en kies **Extensies → Apps Script**.
 2. Voeg een nieuw scriptbestand toe en plak de inhoud van `integration/Voortgang.gs`. Laat bestaande scripts staan.
@@ -44,7 +44,7 @@ Open `http://127.0.0.1:8080`. Deze expliciete voorbeeldmodus luistert alleen lok
 
 Gebruik een nieuw project en deze repository. De Dockerfile start de applicatie. Koppel een Railway Volume op `/data`, gebruik één replica en de healthcheck `/health`. De applicatie weigert in productie te starten zonder de door Railway geleverde volumevariabele. Het volume bewaart de SQLite database over deployments heen.
 
-Maak toegangssleutels met `node scripts/create-secrets.mjs`. Stel `TEAM_PASSWORD_HASH`, `SESSION_SECRET` en `SYNC_TOKEN` als Railway variabelen in. Gebruik `TEAM_PASSWORD` alleen om het teamwachtwoord te delen; plaats dit niet in GitHub. Cookies verlopen na 12 uur. Een wijziging van SESSION_SECRET logt alle gebruikers uit.
+Maak toegangssleutels met `node scripts/create-secrets.mjs`. Stel `TEAM_PASSWORD_HASH`, `ADMIN_PASSWORD_HASH`, `SESSION_SECRET` en `SYNC_TOKEN` als Railway variabelen in. Gebruik de leesbare wachtwoorden alleen om toegang te delen; plaats ze niet in GitHub. Cookies verlopen na 12 uur. Een wijziging van SESSION_SECRET logt alle gebruikers uit.
 
 Voor een eenmalige historische import kan `INITIAL_DATA_GZIP_BASE64` het gecomprimeerde private JSON-bestand bevatten. Dit wordt uitsluitend ingelezen bij een lege database. De server biedt ook `/api/import` voor een lege database en `/api/snapshots` voor nieuwe rapportagemomenten, beide met `Authorization: Bearer <SYNC_TOKEN>`. De sleutel geeft schrijftoegang.
 

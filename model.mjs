@@ -40,5 +40,15 @@ export function makeView(snapshots, selectedId, compareId) {
     return {...c, change:comparison(c,previous?.clients.find(x=>x.id===c.id)), history};
   }).sort((a,b)=>(a.priority??9999)-(b.priority??9999)||a.name.localeCompare(b.name,'nl'));
   const brief=s=>s?({id:s.id,label:s.label,capturedAt:s.capturedAt,kind:s.kind,reportWeek:s.reportWeek}):null;
-  return {snapshots:snapshots.map(brief).reverse(), selected:brief(selected), comparison:brief(previous), clients};
+  const timeline=snapshots.slice(0,at+1).filter(s=>s.clients.some(c=>c.priority!==null)).slice(-6);
+  const priorityHistory={
+    periods:timeline.map(brief),
+    rows:clients.map(c=>{
+      const positions=timeline.map(s=>s.clients.find(x=>x.id===c.id)?.priority??null);
+      const known=positions.filter(v=>v!==null);
+      const movement=known.length>1?known.at(-2)-known.at(-1):null;
+      return {id:c.id,name:c.name,positions,movement};
+    })
+  };
+  return {snapshots:snapshots.map(brief).reverse(), selected:brief(selected), comparison:brief(previous), priorityHistory, clients};
 }

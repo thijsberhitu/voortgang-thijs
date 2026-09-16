@@ -5,6 +5,13 @@ const date=s=>s?new Intl.DateTimeFormat('nl-NL',{day:'numeric',month:'short',yea
 const statusClass=s=>s==='Actie nodig'?'action':s==='Op schema'?'good':'';
 const statusHTML=s=>`<span class="status ${statusClass(s)}">${escape(s)}</span>`;
 function text(value){return escape(value||'Niet ingevuld');}
+function periodName(label){const value=String(label||'');return escape(value.length>22?value.slice(0,20)+'…':value);}
+function priorityClass(value){return value!==null&&value<=3?'top':'';}
+function renderPriorityHistory(){
+  const target=$('#priorityHistory'),history=data?.priorityHistory;
+  if(!history?.periods?.length){target.innerHTML='<div class="empty">Nog geen vastgelegde prioriteitsmomenten.</div>';return;}
+  target.innerHTML=`<table class="priority-table"><thead><tr><th>Klant</th>${history.periods.map(p=>`<th title="${escape(p.label)}">${periodName(p.label)}</th>`).join('')}<th>Verschuiving</th></tr></thead><tbody>${history.rows.map(row=>`<tr><th>${escape(row.name)}</th>${row.positions.map(value=>`<td>${value===null?'<span class="priority-missing">–</span>':`<span class="priority-dot ${priorityClass(value)}">${value}</span>`}</td>`).join('')}<td>${row.movement===null?'<span class="movement neutral">Nog geen vergelijking</span>':row.movement===0?'<span class="movement neutral">Gelijk</span>':`<span class="movement ${row.movement>0?'up':'down'}">${row.movement>0?'↑':'↓'} ${Math.abs(row.movement)} plek${Math.abs(row.movement)===1?'':'ken'}</span>`}</td></tr>`).join('')}</tbody></table>`;
+}
 async function api(path,options){const r=await fetch(path,options);const j=await r.json();if(!r.ok){if(r.status===401&&path!='/api/login')showLogin();throw Error(j.error||'Gegevens konden niet worden geladen.');}return j;}
 function showLogin(){$('#app').classList.add('hidden');$('#login').classList.remove('hidden');}
 function showApp(){$('#app').classList.remove('hidden');$('#login').classList.add('hidden');$('#logout').classList.toggle('hidden',demo);}
@@ -21,7 +28,7 @@ async function load(snapshot='',compare=''){
     $('#periodBadge').textContent=selectedIndex===0?(data.selected.kind==='published'?'Laatste update':'Startstand'):'Eerdere update';
     const notice=$('#sourceNotice');notice.classList.toggle('hidden',data.selected.kind==='published');notice.textContent=data.selected.kind==='baseline'?'Startstand uit je aangeleverde bestand. De eerdere weken bevatten geen opgeslagen prioriteiten. Nieuwe vastgelegde updates maken de vergelijking mogelijk.':'Historische week uit het aangeleverde bestand. Het exacte verzendmoment en de toenmalige prioriteiten zijn niet vastgelegd.';
     $('#total').textContent=data.clients.length;$('#navCount').textContent=data.clients.length;$('#needsAction').textContent=data.clients.filter(c=>c.status==='Actie nodig').length;$('#onTrack').textContent=data.clients.filter(c=>c.status==='Op schema').length;
-    const known=data.clients.filter(c=>c.change.kind!=='unknown');$('#changed').textContent=known.length?known.filter(c=>c.change.kind!=='same').length:'?';$('#changeCaption').textContent=known.length?`Van ${known.length} vergelijkbare klanten`:'Eerdere prioriteiten ontbreken';renderClients();
+    const known=data.clients.filter(c=>c.change.kind!=='unknown');$('#changed').textContent=known.length?known.filter(c=>c.change.kind!=='same').length:'?';$('#changeCaption').textContent=known.length?`Van ${known.length} vergelijkbare klanten`:'Eerdere prioriteiten ontbreken';renderPriorityHistory();renderClients();
   }catch(e){$('#error').textContent=e.message;$('#error').classList.remove('hidden');}
 }
 $('#loginForm').addEventListener('submit',async e=>{e.preventDefault();const button=e.target.querySelector('button');button.disabled=true;$('#loginError').textContent='';try{await api('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:$('#password').value})});$('#password').value='';showApp();await load();}catch(e){$('#loginError').textContent=e.message;}finally{button.disabled=false;}});

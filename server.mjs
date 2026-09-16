@@ -14,9 +14,10 @@ if (demo && production) throw new Error('DEMO_MODE is niet toegestaan in product
 const dataDir=resolve(process.env.DATA_DIR||join(ROOT,'.data'));
 if (production && (process.env.RAILWAY_VOLUME_MOUNT_PATH!=='/data' || dataDir!=='/data')) throw new Error('Koppel eerst een persistent volume op /data.');
 const passwordHash=process.env.TEAM_PASSWORD_HASH||'';
+const adminPasswordHash=process.env.ADMIN_PASSWORD_HASH||'';
 const sessionSecret=process.env.SESSION_SECRET||'';
 const syncToken=process.env.SYNC_TOKEN||'';
-if (!demo && (!/^[a-f0-9]{32}:[a-f0-9]{128}$/.test(passwordHash) || sessionSecret.length<32 || syncToken.length<32)) throw new Error('Stel TEAM_PASSWORD_HASH, SESSION_SECRET en SYNC_TOKEN veilig in.');
+if (!demo && (!/^[a-f0-9]{32}:[a-f0-9]{128}$/.test(passwordHash) || !/^[a-f0-9]{32}:[a-f0-9]{128}$/.test(adminPasswordHash) || sessionSecret.length<32 || syncToken.length<32)) throw new Error('Stel TEAM_PASSWORD_HASH, ADMIN_PASSWORD_HASH, SESSION_SECRET en SYNC_TOKEN veilig in.');
 mkdirSync(dataDir,{recursive:true});
 const db=new DatabaseSync(join(dataDir,'voortgang.sqlite'));
 db.exec('PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS snapshots(id TEXT PRIMARY KEY, captured_at TEXT, body TEXT NOT NULL);');
@@ -44,13 +45,15 @@ if (demo && db.prepare('SELECT COUNT(*) AS n FROM snapshots').get().n===0 && exi
 const all=()=>db.prepare('SELECT body FROM snapshots ORDER BY rowid').all().map(x=>JSON.parse(x.body));
 const equal=(a,b)=>timingSafeEqual(createHash('sha256').update(a).digest(),createHash('sha256').update(b).digest());
 const sign=s=>createHmac('sha256',sessionSecret).update(s).digest('base64url');
-function authorized(req) {
-  if (demo) return true;
-  const cookie=req.headers.cookie?.split(';').map(s=>s.trim()).find(s=>s.startsWith('vt_session='))?.slice(11)||'';
+function session(req, role='viewer') {
+  if (demo) return {role,csrf:'demo-csrf',exp:Date.now()+3600000};
+  const cookieName=role==='admin'?'vt_admin_session=':'vt_session=';
+  const cookie=req.headers.cookie?.split(';').map(s=>s.trim()).find(s=>s.startsWith(cookieName))?.slice(cookieName.length)||'';
   const [payload,sig]=cookie.split('.');
-  if (!payload || !sig || !equal(sign(payload),sig)) return false;
-  try {return JSON.parse(Buffer.from(payload,'base64url').toString()).exp>Date.now();} catch{return false;}
+  if (!payload || !sig || !equal(sign(payload),sig)) return null;
+  try {const value=JSON.parse(Buffer.from(payload,'base64url').toString());return value.exp>Date.now()&&value.role===role?value:null;} catch{return null;}
 }
+const authorized=req=>Boolean(session(req,'viewer')||session(req,'admin'));
 function headers(res) {
   res.setHeader('Cache-Control','no-store');
   res.setHeader('X-Content-Type-Options','nosniff');
@@ -64,7 +67,7 @@ async function body(req){let s='';for await(const c of req){s+=c;if(Buffer.byteL
 const attempts=new Map();
 setInterval(()=>{for(const[k,v]of attempts)if(v.until<Date.now())attempts.delete(k);},60000).unref();
 const limited=key=>{const now=Date.now();let slot=attempts.get(key);if(!slot||slot.until<now){slot={count:0,until:now+15*60*1000};attempts.set(key,slot);}return ++slot.count>15;};
-const files={'/':['index.html','text/html; charset=utf-8'],'/app.js':['app.js','text/javascript; charset=utf-8'],'/styles.css':['styles.css','text/css; charset=utf-8'],'/favicon.svg':['favicon.svg','image/svg+xml']};
+const files={'/':['index.html','text/html; charset=utf-8'],'/app.js':['app.js','text/javascript; charset=utf-8'],'/styles.css':['styles.css','text/css; charset=utf-8'],'/favicon.svg':['favicon.svg','image/svg+xml'],'/beheer':['beheer.html','text/html; charset=utf-8'],'/beheer.js':['beheer.js','text/javascript; charset=utf-8']};
 const server=http.createServer(async(req,res)=>{
   headers(res);
   try {
@@ -72,18 +75,41 @@ const server=http.createServer(async(req,res)=>{
     if(req.method==='GET' && url.pathname==='/health')return json(res,200,{ok:true});
     if(req.method==='GET' && files[url.pathname]){const[f,type]=files[url.pathname];res.writeHead(200,{'Content-Type':type});return res.end(readFileSync(join(ROOT,'public',f)));}
     if(req.method==='GET' && url.pathname==='/api/session')return json(res,200,{authenticated:authorized(req),demo});
-    if(req.method==='POST' && url.pathname==='/api/login'){
+    if(req.method==='GET' && url.pathname==='/api/admin/session'){const s=session(req,'admin');return json(res,200,{authenticated:Boolean(s),csrf:s?.csrf||'',demo});}
+    if(req.method==='POST' && ['/api/login','/api/admin/login'].includes(url.pathname)){
+      const admin=url.pathname==='/api/admin/login';
       const ip=production?String(req.headers['x-railway-client-ip']||req.socket.remoteAddress):req.socket.remoteAddress;
-      if(limited(ip))return json(res,429,{error:'Te veel pogingen. Probeer het over 15 minuten opnieuw.'});
+      if(limited((admin?'admin:':'viewer:')+ip))return json(res,429,{error:'Te veel pogingen. Probeer het over 15 minuten opnieuw.'});
       const {password}=await body(req);
-      const [salt,expected]=passwordHash.split(':');
+      const [salt,expected]=(admin?adminPasswordHash:passwordHash).split(':');
       if(!salt || typeof password!=='string' || password.length>300 || !equal(scryptSync(password,salt,64).toString('hex'),expected))return json(res,401,{error:'Het wachtwoord klopt niet.'});
-      attempts.delete(ip);
-      const payload=Buffer.from(JSON.stringify({exp:Date.now()+12*3600*1000,nonce:randomBytes(16).toString('hex')})).toString('base64url');
-      res.setHeader('Set-Cookie',`vt_session=${payload}.${sign(payload)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200${production?'; Secure':''}`);
-      return json(res,200,{ok:true});
+      attempts.delete((admin?'admin:':'viewer:')+ip);
+      const value={exp:Date.now()+12*3600*1000,role:admin?'admin':'viewer',nonce:randomBytes(16).toString('hex')};
+      if(admin)value.csrf=randomBytes(24).toString('base64url');
+      const payload=Buffer.from(JSON.stringify(value)).toString('base64url');
+      res.setHeader('Set-Cookie',`${admin?'vt_admin_session':'vt_session'}=${payload}.${sign(payload)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200${production?'; Secure':''}`);
+      return json(res,200,{ok:true,csrf:value.csrf||''});
     }
     if(req.method==='POST' && url.pathname==='/api/logout'){res.setHeader('Set-Cookie',`vt_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${production?'; Secure':''}`);return json(res,200,{ok:true});}
+    if(req.method==='POST' && url.pathname==='/api/admin/logout'){res.setHeader('Set-Cookie',`vt_admin_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${production?'; Secure':''}`);return json(res,200,{ok:true});}
+    if(req.method==='GET' && url.pathname==='/api/admin/draft'){
+      const s=session(req,'admin');if(!s)return json(res,401,{error:'Log in als beheerder.'});
+      const latest=all().at(-1);return json(res,200,{csrf:s.csrf,baseSnapshotId:latest?.id||null,baseLabel:latest?.label||'Nog geen update',clients:latest?.clients||[]});
+    }
+    if(req.method==='POST' && url.pathname==='/api/admin/publish'){
+      const s=session(req,'admin');if(!s)return json(res,401,{error:'Log in als beheerder.'});
+      if(!req.headers['x-csrf-token']||!equal(String(req.headers['x-csrf-token']),s.csrf))return json(res,403,{error:'De beveiligingscontrole is verlopen. Log opnieuw in.'});
+      const input=await body(req), current=all().at(-1);
+      if(input.baseSnapshotId!==(current?.id||null))return json(res,409,{error:'Er is inmiddels een nieuwere update. Vernieuw de beheerpagina voordat je publiceert.'});
+      const now=new Date(), amsterdamDate=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Amsterdam',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
+      const d=new Date(amsterdamDate+'T12:00:00Z'),day=d.getUTCDay()||7;d.setUTCDate(d.getUTCDate()+4-day);const yearStart=new Date(Date.UTC(d.getUTCFullYear(),0,1));const week=Math.ceil((((d-yearStart)/86400000)+1)/7);
+      const clients=validateClients(input.clients).map(c=>({...c,sourceWeek:week}));
+      if(current?.clients.some(c=>!clients.some(n=>n.id===c.id)))return json(res,409,{error:'Er ontbreken klanten. De update is niet opgeslagen.'});
+      const capturedAt=now.toISOString(),label=new Intl.DateTimeFormat('nl-NL',{timeZone:'Europe/Amsterdam',weekday:'long',day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}).format(now);
+      const snapshot={id:'beheer-'+now.getTime()+'-'+randomBytes(4).toString('hex'),kind:'published',capturedAt,label,reportWeek:week,clients};
+      db.prepare('INSERT INTO snapshots VALUES(?,?,?)').run(snapshot.id,capturedAt,JSON.stringify(snapshot));
+      return json(res,201,{ok:true,snapshot:label,count:clients.length});
+    }
     if(req.method==='POST' && ['/api/snapshots','/api/import'].includes(url.pathname)){
       if(!syncToken || !equal(req.headers.authorization||'',`Bearer ${syncToken}`))return json(res,401,{error:'Geen toegang.'});
       const input=await body(req);

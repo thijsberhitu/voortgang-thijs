@@ -14,6 +14,8 @@ test('Momenten blijven onveranderd; historische vergelijking bevat geen toekomst
   assert.equal(makeView(snapshots,'thu','tue').clients[0].change.delta,3);
   assert.equal(makeView(snapshots,'tue','thu').comparison.id,'old');
   assert.equal(makeView(snapshots,'thu').clients[0].history[0].snapshotId,'tue');
+  assert.deepEqual(makeView(snapshots,'thu').priorityHistory.rows[0].positions,[4,1]);
+  assert.equal(makeView(snapshots,'thu').priorityHistory.rows[0].movement,3);
   assert.equal(JSON.stringify(snapshots),prior);
 });
 test('Ongeldige deadlines, dubbele klanten en ongeldige prioriteiten worden geweigerd',()=>{
