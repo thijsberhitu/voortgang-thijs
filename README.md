@@ -1,6 +1,6 @@
 # Voortgang Thijs
 
-Apart teamdashboard met een actuele klantenlijst, filters, een prioriteitentabel en uitklapbare historie. De afgeschermde beheeromgeving op `/beheer` is de standaardinvoer. Iedere publicatie legt een onveranderlijk rapportagemoment vast. Het project heeft geen koppeling met een ander dashboard.
+Apart teamdashboard met een actuele klantenlijst, filters, een prioriteitentabel en uitklapbare historie. De afgeschermde beheeromgeving op `/beheer` is de standaardinvoer. Iedere publicatie legt een apart rapportagemoment vast. Gepubliceerde momenten kunnen achteraf bewust als correctie worden aangepast. Het project heeft geen koppeling met een ander dashboard.
 
 ## Dagelijks gebruik
 

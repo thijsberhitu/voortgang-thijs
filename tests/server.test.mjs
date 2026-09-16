@@ -34,8 +34,12 @@ test('Authenticatie, volledige snapshots, retries en opslag na herstart',async()
     const published=await request('/api/admin/publish',{baseSnapshotId:draft.baseSnapshotId,clients:[{...draft.clients[0],priority:3,nextAction:'Nieuwe actie'}]},{Cookie:adminCookie,'X-CSRF-Token':adminSession.csrf});
     assert.equal(published.status,201);
     assert.equal((await request('/api/admin/publish',{baseSnapshotId:draft.baseSnapshotId,clients:draft.clients},{Cookie:adminCookie,'X-CSRF-Token':adminSession.csrf})).status,409);
+    const latestDraft=await (await request('/api/admin/draft',null,{Cookie:adminCookie})).json();assert.equal(latestDraft.editableSnapshots.length,3);
+    const correction=await (await request('/api/admin/draft?'+new URLSearchParams({snapshot:latestDraft.baseSnapshotId}),null,{Cookie:adminCookie})).json();assert.equal(correction.mode,'edit');
+    const corrected=await request('/api/admin/publish',{editSnapshotId:correction.editSnapshotId,revision:correction.revision,clients:[{...correction.clients[0],priority:2,nextAction:'Gecorrigeerde actie'}]},{Cookie:adminCookie,'X-CSRF-Token':adminSession.csrf});assert.equal(corrected.status,200);
+    assert.equal((await request('/api/admin/publish',{editSnapshotId:correction.editSnapshotId,revision:correction.revision,clients:correction.clients},{Cookie:adminCookie,'X-CSRF-Token':adminSession.csrf})).status,409);
     server.kill('SIGTERM');await once(server,'exit');await start();
     const persisted=await (await request('/api/dashboard',null,{Cookie:cookie})).json();assert.equal(persisted.snapshots.length,3);
-    assert.equal(persisted.clients[0].priority,3);assert.match(persisted.selected.id,/^beheer-/);assert.ok(persisted.selected.reportWeek>=1);
+    assert.equal(persisted.clients[0].priority,2);assert.equal(persisted.clients[0].nextAction,'Gecorrigeerde actie');assert.match(persisted.selected.id,/^beheer-/);assert.ok(persisted.selected.reportWeek>=1);
   }finally{if(server&&server.exitCode===null){server.kill('SIGTERM');await once(server,'exit');}}
 });

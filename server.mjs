@@ -94,12 +94,27 @@ const server=http.createServer(async(req,res)=>{
     if(req.method==='POST' && url.pathname==='/api/admin/logout'){res.setHeader('Set-Cookie',`vt_admin_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${production?'; Secure':''}`);return json(res,200,{ok:true});}
     if(req.method==='GET' && url.pathname==='/api/admin/draft'){
       const s=session(req,'admin');if(!s)return json(res,401,{error:'Log in als beheerder.'});
-      const latest=all().at(-1);return json(res,200,{csrf:s.csrf,baseSnapshotId:latest?.id||null,baseLabel:latest?.label||'Nog geen update',clients:latest?.clients||[]});
+      const snapshots=all(),latest=snapshots.at(-1),requested=url.searchParams.get('snapshot');
+      const selected=requested?snapshots.find(item=>item.id===requested&&item.kind==='published'):null;
+      if(requested&&!selected)return json(res,404,{error:'Dit publicatiemoment bestaat niet of kan niet worden aangepast.'});
+      const source=selected||latest,editableSnapshots=snapshots.filter(item=>item.kind==='published').slice().reverse().map(item=>({id:item.id,label:item.label,editedAt:item.editedAt||null}));
+      return json(res,200,{csrf:s.csrf,mode:selected?'edit':'new',draftKey:selected?'edit:'+selected.id:'new:'+String(latest?.id||'empty'),editSnapshotId:selected?.id||null,revision:selected?createHash('sha256').update(JSON.stringify(selected)).digest('hex'):null,baseSnapshotId:latest?.id||null,baseLabel:source?.label||'Nog geen update',editableSnapshots,clients:source?.clients||[]});
     }
     if(req.method==='POST' && url.pathname==='/api/admin/publish'){
       const s=session(req,'admin');if(!s)return json(res,401,{error:'Log in als beheerder.'});
       if(!req.headers['x-csrf-token']||!equal(String(req.headers['x-csrf-token']),s.csrf))return json(res,403,{error:'De beveiligingscontrole is verlopen. Log opnieuw in.'});
-      const input=await body(req), current=all().at(-1);
+      const input=await body(req), snapshots=all(),current=snapshots.at(-1);
+      if(input.editSnapshotId){
+        const target=snapshots.find(item=>item.id===input.editSnapshotId&&item.kind==='published');
+        if(!target)return json(res,404,{error:'Dit publicatiemoment bestaat niet of kan niet worden aangepast.'});
+        const currentRevision=createHash('sha256').update(JSON.stringify(target)).digest('hex');
+        if(typeof input.revision!=='string'||!equal(input.revision,currentRevision))return json(res,409,{error:'Dit moment is inmiddels aangepast. Open de datum opnieuw voordat je verdergaat.'});
+        const clients=validateClients(input.clients);
+        if(clients.length!==target.clients.length||target.clients.some(c=>!clients.some(n=>n.id===c.id)))return json(res,409,{error:'De klantenlijst van een bestaand moment mag niet veranderen.'});
+        const corrected={...target,editedAt:new Date().toISOString(),clients};
+        db.prepare('UPDATE snapshots SET body=? WHERE id=?').run(JSON.stringify(corrected),target.id);
+        return json(res,200,{ok:true,mode:'updated',snapshot:target.label,count:clients.length});
+      }
       if(input.baseSnapshotId!==(current?.id||null))return json(res,409,{error:'Er is inmiddels een nieuwere update. Vernieuw de beheerpagina voordat je publiceert.'});
       const now=new Date(), amsterdamDate=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Amsterdam',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
       const d=new Date(amsterdamDate+'T12:00:00Z'),day=d.getUTCDay()||7;d.setUTCDate(d.getUTCDate()+4-day);const yearStart=new Date(Date.UTC(d.getUTCFullYear(),0,1));const week=Math.ceil((((d-yearStart)/86400000)+1)/7);
